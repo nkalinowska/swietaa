@@ -13,6 +13,7 @@ FUR_COLOR = 'white'
 FUR_TRUNK_COLOR = '#E0E0E0' 
 BUCKLE_COLOR = 'gold'
 BOOT_COLOR = 'black'
+Y_FLOOR = -3.0 # Poziom podłogi (dno butów)
 
 # --- FUNKCJE POMOCNICZE ---
 def get_random_color():
@@ -29,13 +30,9 @@ num_gifts = st.sidebar.slider('Liczba prezentów pod Mikołajem', min_value=0, m
 gift_shape = st.sidebar.selectbox('Wybierz kształt prezentów', ('Kwadrat', 'Koło', 'Losowy'), key='gift_shape_select')
 ribbon_color_mode = st.sidebar.radio('Tryb koloru wstążek', ('Losowy', 'Stały (Złoty)'), key='ribbon_color_mode_radio')
 
-# --- ZMODYFIKOWANA FUNKCJA RYSOWANIA ---
+# --- FUNKCJA RYSOWANIA Z POPRAWIONĄ LOGIKĄ KOLIZJI ---
 
 def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode):
-    """
-    Funkcja rysująca schematycznego Świętego Mikołaja i konfigurowalne prezenty.
-    Została poprawiona, aby zapobiec nachodzeniu prezentów na buty oraz na siebie nawzajem.
-    """
     fig, ax = plt.subplots(figsize=(6, 10))
     ax.set_xlim(0, 10)
     ax.set_ylim(-3.2, 9) 
@@ -93,24 +90,16 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
     LEFT_GIFT_AREA = (0.5, 3.0) 
     # Prawy But jest między X=5.5 a X=7.0
     RIGHT_GIFT_AREA = (7.0, 9.5) 
+
     
-    Y_FLOOR = -3.0 # Poziom podłogi
-    
-    # Przechowuje listę już umieszczonych prezentów w bieżącym pasie (dla uniknięcia kolizji)
-    # Format: [(x_start, x_end, y_start, y_end), ...]
-    
-    def check_collision(new_gift_rect, placed_gifts):
-        """Sprawdza kolizję nowego prezentu z już umieszczonymi."""
-        nx, ny, nw, nh = new_gift_rect
-        nx_end = nx + nw
-        ny_end = ny + nh
-        
-        for px, py, pw, ph in placed_gifts:
+    # Uproszczona funkcja sprawdzania kolizji tylko na osi X
+    def check_x_collision(new_x, new_w, placed_gifts, margin=0.05):
+        """Sprawdza kolizję poziomu, dodając mały margines."""
+        new_x_end = new_x + new_w
+        for px, pw in placed_gifts:
             px_end = px + pw
-            py_end = py + ph
-            
-            # Warunek kolizji: przecinanie się w obu osiach
-            if (nx < px_end and nx_end > px) and (ny < py_end and ny_end > py):
+            # Sprawdzamy, czy nowe pole (wraz z marginesem) nakłada się na istniejące
+            if (new_x < px_end + margin and new_x_end > px - margin):
                 return True
         return False
     
@@ -118,40 +107,41 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
         if count <= 0:
             return
             
-        placed_gifts = []
+        placed_gifts_x_w = [] # Lista przechowująca tylko (x, w)
 
         for j in range(count):
-            # Próbujemy znaleźć bezpieczne koordynaty, maks. 50 prób
             attempts = 0
             safe_to_place = False
             
             while attempts < 50 and not safe_to_place:
-                # Losowa wysokość i szerokość (małe do średnie prezenty)
+                # W (szerokość): max 1.4, min 0.7
                 w = random.uniform(0.7, 1.4) 
+                # H (wysokość): max 1.4, min 0.7
                 h = random.uniform(0.7, 1.4)
                 
-                # Pozycja Y: losowo między podłogą a poziomem butów (góra y=-2.0)
-                y_range = -2.0 - h # Górny limit Y
-                y = random.uniform(Y_FLOOR, y_range)
+                # Upewniamy się, że prezent zmieści się w strefie
+                if w > (x_end_area - x_start_area):
+                    w = x_end_area - x_start_area # Ograniczenie szerokości
                 
-                # Pozycja X: losowo wewnątrz przydzielonej strefy
+                # Losujemy X: wewnątrz strefy (x_start_area do x_end_area - w)
                 x = random.uniform(x_start_area, x_end_area - w)
                 
-                # Sprawdzenie kolizji z już umieszczonymi prezentami
-                if not check_collision((x, y, w, h), placed_gifts):
+                # Pozycja Y: dolna krawędź prezentu jest na podłodze Y_FLOOR
+                y = Y_FLOOR
+                
+                # Sprawdzenie kolizji tylko na osi X (główna przyczyna problemów)
+                if not check_x_collision(x, w, placed_gifts_x_w):
                     safe_to_place = True
                 
                 attempts += 1
 
             if not safe_to_place:
-                # Jeśli po 50 próbach nie znaleziono miejsca, pomijamy ten prezent
                 continue 
 
-            # Dodanie prezentu do listy umieszczonych
-            placed_gifts.append((x, y, w, h))
+            # Dodanie prezentu do listy umieszczonych (tylko X i W są potrzebne do kolizji)
+            placed_gifts_x_w.append((x, w))
 
             # --- RYSOWANIE ZNALEZIONEGO PREZENTU ---
-
             gift_color = get_random_color()
             ribbon_color = 'gold' if ribbon_color_mode == 'Stały (Złoty)' else get_random_color()
 
@@ -159,22 +149,21 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
             if current_shape == 'Losowy':
                 current_shape = random.choice(['Kwadrat', 'Koło'])
 
-            # Wyznaczanie współrzędnych centralnych i górnych
             if current_shape == 'Kwadrat':
                 prezent = patches.Rectangle((x, y), w, h, facecolor=gift_color, edgecolor='black', linewidth=1, zorder=0)
                 center_x, center_y, top_y = x + w / 2, y + h / 2, y + h
             else: # Koło
                 radius = min(w, h) / 2
                 center_x = x + w / 2
-                center_y = y + radius
+                # Ustawienie środka koła, by jego dół był na Y_FLOOR
+                center_y = Y_FLOOR + radius 
                 prezent = patches.Circle((center_x, center_y), radius=radius, facecolor=gift_color, edgecolor='black', linewidth=1, zorder=0)
                 top_y = center_y + radius
             
             ax.add_patch(prezent)
             
-            # --- WZORY I WSTĄŻKI (Dostosowane do kształtu) ---
+            # --- WZORY I WSTĄŻKI (jak poprzednio) ---
             if current_shape == 'Kwadrat':
-                 # Pasy + Wstążki (jak w poprzedniej wersji)
                  num_stripes = random.choice([2, 3, 4])
                  for s in range(num_stripes):
                     stripe_x = x + (s + 0.5) * w / num_stripes - (w / (num_stripes * 4))
@@ -187,7 +176,6 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
                  ax.add_patch(wstazka_h)
 
             else: # Koło
-                # Kropeczki + Wstążki (jak w poprzedniej wersji)
                 radius = min(w, h) / 2
                 num_dots = random.choice([10, 12, 14])
                 for k in range(num_dots):
@@ -203,12 +191,11 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
                 wstazka_h = patches.Rectangle((center_x - radius, center_y - 0.08), 2 * radius, 0.16, facecolor=ribbon_color, zorder=1)
                 ax.add_patch(wstazka_h)
 
-            # --- KOKARDA ---
+            # --- KOKARDA i SHINE ---
             if random.choice([True, False]):
                 petelka = patches.Circle((center_x, top_y - 0.05), radius=0.1, facecolor=ribbon_color, zorder=2)
                 ax.add_patch(petelka)
 
-            # --- SHINE (POŁYSK) ---
             shine_color = random.choice(['white', 'yellow'])
             if current_shape == 'Kwadrat':
                 shine_x = random.uniform(x + 0.15, x + w * 0.5)
