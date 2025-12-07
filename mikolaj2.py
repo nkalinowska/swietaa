@@ -25,7 +25,7 @@ main_color = st.sidebar.color_picker('Wybierz kolor stroju', '#FF0000', key='mai
 belt_color = st.sidebar.color_picker('Wybierz kolor paska', '#000000', key='belt_color')
 
 st.sidebar.header("Konfigurator Prezentów")
-num_gifts = st.sidebar.slider('Liczba prezentów', min_value=0, max_value=12, value=5, step=1, key='num_gifts')
+num_gifts = st.sidebar.slider('Liczba prezentów pod Mikołajem', min_value=0, max_value=12, value=5, step=1, key='num_gifts')
 gift_shape = st.sidebar.selectbox('Wybierz kształt prezentów', ('Kwadrat', 'Koło', 'Losowy'), key='gift_shape_select')
 ribbon_color_mode = st.sidebar.radio('Tryb koloru wstążek', ('Losowy', 'Stały (Złoty)'), key='ribbon_color_mode_radio')
 
@@ -38,7 +38,7 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
     """
     fig, ax = plt.subplots(figsize=(6, 10))
     ax.set_xlim(0, 10)
-    ax.set_ylim(-3.2, 9) # Zmieniona minimalna oś Y na -3.2 dla lepszego odstępu
+    ax.set_ylim(-3.2, 9) 
     ax.set_aspect('equal')
     ax.axis('off')
 
@@ -96,43 +96,43 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
     ax.add_patch(noga_l)
     noga_p = patches.Rectangle((5.5, -2), 1, 2, facecolor=main_color, zorder=1)
     ax.add_patch(noga_p)
+    # BUTY Mikołaja
     but_l = patches.Rectangle((3, -3), 1.5, 1, facecolor=BOOT_COLOR, zorder=2)
     ax.add_patch(but_l)
     but_p = patches.Rectangle((5.5, -3), 1.5, 1, facecolor=BOOT_COLOR, zorder=2)
     ax.add_patch(but_p)
 
-    # --- PREZENTY: ZAWSZE OBOK (LEWA I PRAWA STRONA) ---
-
-    LEFT_X_START, LEFT_X_END = 0.5, 3.0    # nic nie wejdzie pod nogi
-    RIGHT_X_START, RIGHT_X_END = 7.0, 9.5
+    # --- NOWE, ŚCIŚLE OGRANICZONE OBSZARY PREZENTÓW ---
     
-    # *** KLUCZOWA ZMIANA: Y_BASE to podłoga (dolna granica butów) ***
+    # Obszary, które NIE ZAWIERAJĄ butów Mikołaja:
+    LEFT_GIFT_AREA = (0.5, 3.0) 
+    RIGHT_GIFT_AREA = (7.0, 9.5) 
     Y_FLOOR = -3.0
-    Y_MAX_GIFT_BOTTOM = Y_FLOOR # Prezenty opierają się na podłodze
 
-    def draw_gifts_band(x_start, x_end, count):
+    def draw_gifts_band(x_start_area, x_end_area, count):
         if count <= 0:
             return
 
-        band_width = x_end - x_start
+        # Używamy ścisłych granic obszaru
+        band_width = x_end_area - x_start_area
         slot_width = band_width / count
 
         for j in range(count):
-            slot_x0 = x_start + j * slot_width
+            slot_x0 = x_start_area + j * slot_width
 
-            # Losowa wysokość: Max 1.4, Min 0.9. Muszą się zmieścić POD tułowiem.
+            # Losowa wysokość: Max 1.4, Min 0.9.
             h = random.uniform(0.9, 1.4) 
             
-            # W: rozmiar dopasowany do slotu
+            # W: rozmiar dopasowany do slotu, aby zostawić margines
             w_min = slot_width * 0.5
             w_max = slot_width * 0.8
             w = random.uniform(w_min, w_max)
 
-            x = slot_x0 + (slot_width - w) / 2
+            # Pozycja X: losowo wewnątrz przydzielonego slotu
+            x = slot_x0 + random.uniform(0, slot_width - w)
             
-            # Y: Rysujemy prezent od dołu (Y_MAX_GIFT_BOTTOM) i odejmujemy jego wysokość.
-            # Dzięki temu dolna krawędź jest na Y_FLOOR, a górna na Y_FLOOR + h (czyli max -1.6)
-            y = Y_MAX_GIFT_BOTTOM 
+            # Pozycja Y: prezenty opierają się na podłodze (Y_FLOOR)
+            y = Y_FLOOR 
 
             gift_color = get_random_color()
             ribbon_color = 'gold' if ribbon_color_mode == 'Stały (Złoty)' else get_random_color()
@@ -194,8 +194,7 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
             else:  # Koło
                 radius = min(w, h) / 2
                 center_x = x + w / 2
-                # Centrum Koła: y_base + promień
-                center_y = Y_MAX_GIFT_BOTTOM + radius
+                center_y = Y_FLOOR + radius
 
                 prezent = patches.Circle(
                     (center_x, center_y),
@@ -257,6 +256,7 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
             # --- SHINE (POŁYSK) ---
             shine_color = random.choice(['white', 'yellow'])
             if current_shape == 'Kwadrat':
+                # Połysk na górnym/lewym rogu
                 shine_x = random.uniform(x + 0.15, x + w * 0.5)
                 shine_y = random.uniform(y + h * 0.6, y + h - 0.15)
             else:
@@ -278,11 +278,11 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
 
     # rozdział liczby prezentów na lewą/prawą stronę
     if num_gifts > 0:
-        left_count = (num_gifts + 1) // 2   # zaokrąglenie w górę
+        left_count = (num_gifts + 1) // 2
         right_count = num_gifts - left_count
 
-        draw_gifts_band(LEFT_X_START, LEFT_X_END, left_count)
-        draw_gifts_band(RIGHT_X_START, RIGHT_X_END, right_count)
+        draw_gifts_band(LEFT_GIFT_AREA[0], LEFT_GIFT_AREA[1], left_count)
+        draw_gifts_band(RIGHT_GIFT_AREA[0], RIGHT_GIFT_AREA[1], right_count)
 
     st.pyplot(fig)
 
