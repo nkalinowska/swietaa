@@ -1,10 +1,44 @@
+import streamlit as st
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import numpy as np
+import random 
+
+st.set_page_config(layout="centered")
+st.title("🎅 Święty Mikołaj w Streamlit z Rozbudowanym Konfiguratorem")
+
+# --- STAŁE (Konfiguracja kolorów w Twoim oryginalnym kodzie) ---
+SKIN_COLOR = 'peachpuff'
+FUR_COLOR = 'white'
+FUR_TRUNK_COLOR = '#E0E0E0' 
+BUCKLE_COLOR = 'gold'
+BOOT_COLOR = 'black'
+
+# --- FUNKCJE POMOCNICZE (Wymagane w Streamlit) ---
+def get_random_color():
+    """Generuje losowy kolor w formacie HEX."""
+    return f'#{random.randint(0, 0xFFFFFF):06x}'
+
+# --- KONFIGURACJA KOLORÓW NA PASKU BOCZNYM (Dla pełności) ---
+st.sidebar.header("Konfigurator Stroju")
+main_color = st.sidebar.color_picker('Wybierz kolor stroju', '#FF0000', key='main_color')
+belt_color = st.sidebar.color_picker('Wybierz kolor paska', '#000000', key='belt_color')
+
+st.sidebar.header("Konfigurator Prezentów")
+num_gifts = st.sidebar.slider('Liczba prezentów', min_value=0, max_value=12, value=5, step=1, key='num_gifts')
+gift_shape = st.sidebar.selectbox('Wybierz kształt prezentów', ('Kwadrat', 'Koło', 'Losowy'), key='gift_shape_select')
+ribbon_color_mode = st.sidebar.radio('Tryb koloru wstążek', ('Losowy', 'Stały (Złoty)'), key='ribbon_color_mode_radio')
+
+# --- ZMODYFIKOWANA FUNKCJA RYSOWANIA ---
+
 def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode):
     """
     Funkcja rysująca schematycznego Świętego Mikołaja i konfigurowalne prezenty.
+    Została poprawiona, aby zapobiec nachodzeniu prezentów na buty.
     """
     fig, ax = plt.subplots(figsize=(6, 10))
     ax.set_xlim(0, 10)
-    ax.set_ylim(-3.5, 9)
+    ax.set_ylim(-3.2, 9) # Zmieniona minimalna oś Y na -3.2 dla lepszego odstępu
     ax.set_aspect('equal')
     ax.axis('off')
 
@@ -71,7 +105,10 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
 
     LEFT_X_START, LEFT_X_END = 0.5, 3.0    # nic nie wejdzie pod nogi
     RIGHT_X_START, RIGHT_X_END = 7.0, 9.5
-    Y_BASE = -3.0                           # linia „podłogi”
+    
+    # *** KLUCZOWA ZMIANA: Y_BASE to podłoga (dolna granica butów) ***
+    Y_FLOOR = -3.0
+    Y_MAX_GIFT_BOTTOM = Y_FLOOR # Prezenty opierają się na podłodze
 
     def draw_gifts_band(x_start, x_end, count):
         if count <= 0:
@@ -83,14 +120,19 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
         for j in range(count):
             slot_x0 = x_start + j * slot_width
 
-            # rozmiar dopasowany do slotu
+            # Losowa wysokość: Max 1.4, Min 0.9. Muszą się zmieścić POD tułowiem.
+            h = random.uniform(0.9, 1.4) 
+            
+            # W: rozmiar dopasowany do slotu
             w_min = slot_width * 0.5
             w_max = slot_width * 0.8
             w = random.uniform(w_min, w_max)
-            h = random.uniform(0.9, 1.4)
 
             x = slot_x0 + (slot_width - w) / 2
-            y = Y_BASE
+            
+            # Y: Rysujemy prezent od dołu (Y_MAX_GIFT_BOTTOM) i odejmujemy jego wysokość.
+            # Dzięki temu dolna krawędź jest na Y_FLOOR, a górna na Y_FLOOR + h (czyli max -1.6)
+            y = Y_MAX_GIFT_BOTTOM 
 
             gift_color = get_random_color()
             ribbon_color = 'gold' if ribbon_color_mode == 'Stały (Złoty)' else get_random_color()
@@ -152,7 +194,8 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
             else:  # Koło
                 radius = min(w, h) / 2
                 center_x = x + w / 2
-                center_y = y + radius + 0.05
+                # Centrum Koła: y_base + promień
+                center_y = Y_MAX_GIFT_BOTTOM + radius
 
                 prezent = patches.Circle(
                     (center_x, center_y),
@@ -242,3 +285,7 @@ def draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
         draw_gifts_band(RIGHT_X_START, RIGHT_X_END, right_count)
 
     st.pyplot(fig)
+
+
+# Uruchomienie aplikacji Streamlit
+draw_santa(main_color, belt_color, num_gifts, gift_shape, ribbon_color_mode)
